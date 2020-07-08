@@ -1,11 +1,10 @@
-package main
+package middleware
 
 import (
 	"errors"
+	"github.com/labstack/echo/v4"
 	"sync"
 	"time"
-
-	"github.com/labstack/echo/v4"
 )
 
 type (
@@ -80,7 +79,7 @@ func NewRateLimiter(rlConfig RateLimiterConfig) *RateLimiter {
 	return rateLimiter
 }
 
-func RateLimiterMiddleware(rateLimiter *RateLimiter) echo.MiddlewareFunc {
+func (rateLimiter *RateLimiter) RateLimiterMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
 			// Get the identifier for the user.

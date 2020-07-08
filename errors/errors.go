@@ -1,4 +1,4 @@
-package main
+package errors
 
 type GoLearningError struct {
 	Message string `json:"message"`
