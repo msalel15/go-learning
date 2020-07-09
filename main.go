@@ -1,16 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"github.com/couchbase/gocb/v2"
 	echo "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	goLearningMiddleware "go-learning/middleware"
-	"time"
+	planet "go-learning/domain/planet"
+	"go-learning/domain/user"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 //auth middleware yapalim    //x
 //rate limiting middleware   //x
-//db baglantisi ve repo      //rate limitingi db uzerinden yonetmeliyim
+//db baglantisi ve repo      //x
 //unit test yazalim          // todo
 //benchmark test yazalim
 //dockerize edelim
@@ -18,32 +22,34 @@ import (
 //deployment ve service yaml lari yazalim
 //pipline yazalim ve gitlab uzerinden deploy edelim
 
-var bucket *gocb.Bucket
-
 func main() {
 
-	server := echo.New()
+	cluster := connectToCouchbase()
+	server := startHttpServer()
 
-	// Middleware
-	server.Use(middleware.Logger())
-	server.Use(middleware.Recover())
+	p := planet.New(server, cluster)
+	u := user.New(server, cluster)
 
-	// Routes
-	g := server.Group("/planet")
+	pErr := p.Init()
 
-	rateLimiterConfig := goLearningMiddleware.RateLimiterConfig{
-		Limit: 2,
-		Identifier: func(context echo.Context) string {
-			return context.Path()
-		},
-		BanDurationInSeconds: 5,
+	if pErr != nil {
+		panic(pErr)
 	}
 
-	rateLimiter := goLearningMiddleware.NewRateLimiter(rateLimiterConfig)
+	uErr := u.Init()
 
-	g.GET("/:name", getPlanetHandler, rateLimiter.RateLimiterMiddleware())
-	g.POST("/:name", postPlanetHandler, goLearningMiddleware.BasicAuthMiddleware("test", "sifre123"))
+	if uErr != nil {
+		panic(uErr)
+	}
 
+	go server.Logger.Fatal(server.Start(fmt.Sprintf(":%d", 8081)))
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+}
+
+func connectToCouchbase() *gocb.Cluster {
 	cluster, err := gocb.Connect(
 		"127.0.0.1",
 		gocb.ClusterOptions{
@@ -55,13 +61,15 @@ func main() {
 		panic(err)
 	}
 
-	bucket = cluster.Bucket("go-learning")
+	return cluster
+}
 
-	err = bucket.WaitUntilReady(15*time.Second, nil)
-	if err != nil {
-		panic(err)
-	}
+func startHttpServer() *echo.Echo {
+	server := echo.New()
 
-	// Start server
-	server.Logger.Fatal(server.Start(":8081"))
+	// Middleware
+	server.Use(middleware.Logger())
+	server.Use(middleware.Recover())
+
+	return server
 }

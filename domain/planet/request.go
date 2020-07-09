@@ -1,4 +1,4 @@
-package main
+package planet
 
 type HelloRequest struct {
 	Name    string `param:"name"`

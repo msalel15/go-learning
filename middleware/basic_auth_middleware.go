@@ -4,15 +4,18 @@ import (
 	"encoding/base64"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"go-learning/domain/user"
 	goLearningErrors "go-learning/errors"
 	"strings"
 )
 
-func BasicAuthMiddleware(u, p string) echo.MiddlewareFunc {
+func BasicAuthMiddleware(userService user.UserService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
 
 			authorization := ctx.Request().Header.Get("Authorization")
+
+			authorization = strings.TrimLeft(authorization, "Basic ")
 
 			encodedAuthorization, err := base64.StdEncoding.DecodeString(authorization)
 
@@ -29,8 +32,13 @@ func BasicAuthMiddleware(u, p string) echo.MiddlewareFunc {
 			username := basicAuthValues[0]
 			password := basicAuthValues[1]
 
-			if !strings.EqualFold(username, u) || !strings.EqualFold(password, p) {
+			exist, existErr := userService.IsExistUsernameAndPassword(username, password)
 
+			if existErr != nil {
+				return existErr
+			}
+
+			if !exist {
 				e := goLearningErrors.GoLearningError{
 					Message: "Unauthorized",
 					Code:    40100,
@@ -46,6 +54,8 @@ func BasicAuthMiddleware(u, p string) echo.MiddlewareFunc {
 
 				return e
 			}
+
+			ctx.Set("username", username)
 
 			return next(ctx)
 		}
